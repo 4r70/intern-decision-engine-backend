@@ -54,24 +54,21 @@ public class DecisionEngine {
             throw new NoValidLoanException("No valid loan found!");
         }
 
-        Integer maxAmount = findHighestValidLoanAmount(creditModifier, loanPeriod);
+        int maxLoanAmount = highestValidLoanAmount(loanPeriod);
 
-        if (maxAmount.equals(-1)) {
-            Integer suitablePeriod = findSuitablePeriod(creditModifier,
-                    Long.valueOf(DecisionEngineConstants.MINIMUM_LOAN_AMOUNT), loanPeriod);
-
-            if (suitablePeriod.equals(-1)) {
-                throw new NoValidLoanException("No valid loan found!");
-            }
-
-            int outputLoanAmount = findHighestValidLoanAmount(creditModifier, suitablePeriod);
-
-            return new Decision(outputLoanAmount, suitablePeriod, null);
-        } else {
-            int outputLoanAmount = Math.min(DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT, maxAmount);
-
-            return new Decision(outputLoanAmount, loanPeriod, null);
+        while (maxLoanAmount < DecisionEngineConstants.MINIMUM_LOAN_AMOUNT
+                && loanPeriod <= DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
+            loanPeriod++;
+            maxLoanAmount = highestValidLoanAmount(loanPeriod);
         }
+
+        if (maxLoanAmount < DecisionEngineConstants.MINIMUM_LOAN_AMOUNT
+                || loanPeriod > DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
+            throw new NoValidLoanException("No valid loan found!");
+        }
+
+        return new Decision(Math.min(DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT, maxLoanAmount),
+                loanPeriod, null);
     }
 
 
@@ -93,52 +90,18 @@ public class DecisionEngine {
      *
      * @return Largest valid loan amount with the loan period
      */
-    private Integer findHighestValidLoanAmount(int creditModifier, int loanPeriod) {
-        Integer maxLoanAmount = DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT;
-        Integer minLoanAmount = DecisionEngineConstants.MINIMUM_LOAN_AMOUNT;
-        Integer loanAmount = minLoanAmount;
+    private int highestValidLoanAmount(int loanPeriod) {
+        int maxLoanAmount = Math.min(DecisionEngineConstants.MAXIMUM_LOAN_AMOUNT, creditModifier * loanPeriod);
+        int bestAmount = 0;
 
-        while (loanAmount < maxLoanAmount && loanAmount >= minLoanAmount) {
-            double creditScore = calculateCreditScore(creditModifier, loanAmount, loanPeriod);
-
+        for (int amount = maxLoanAmount; amount >= DecisionEngineConstants.MINIMUM_LOAN_AMOUNT; amount -= 100) {
+            double creditScore = calculateCreditScore(creditModifier, amount, loanPeriod);
             if (creditScore >= 0.1) {
-                loanAmount += 100;
-            } else {
-                if (loanAmount.equals(minLoanAmount)) {
-                    return -1;
-                }
+                bestAmount = amount;
                 break;
             }
         }
-
-        return loanAmount;
-    }
-
-    /**
-     * Calculates a suitable (longer) period for a loan if possible.
-     *
-     * @param creditModifier The given credit modifier
-     * @param loanAmount The given loan amount
-     * @param initialLoanPeriod The initial given loan period
-     * @return The suitable period
-     */
-    private Integer findSuitablePeriod(int creditModifier, Long loanAmount, int initialLoanPeriod) {
-        int loanPeriod = initialLoanPeriod;
-
-        for (int i = loanPeriod; i <= DecisionEngineConstants.MAXIMUM_LOAN_PERIOD; i++) {
-            double creditScore = calculateCreditScore(creditModifier, Math.toIntExact(loanAmount), i);
-
-            if (creditScore >= 0.1) {
-                loanPeriod = i;
-                break;
-            } else {
-                if (i == DecisionEngineConstants.MAXIMUM_LOAN_PERIOD) {
-                    return -1;
-                }
-            }
-        }
-
-        return loanPeriod;
+        return bestAmount;
     }
 
     /**
